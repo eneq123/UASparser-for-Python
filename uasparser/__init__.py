@@ -64,6 +64,9 @@ class UASparser(object):
     cache_dir = ''
     cache_data = None
     update_interval = 3600 * 24 * 10  # 10 days
+    data = ''
+    browser_reg = []
+    os_reg = []
 
     def __init__(self, cache_dir=None):
         """
@@ -75,6 +78,25 @@ class UASparser(object):
             raise UASException("Cache directory %s is not writable.")
 
         self.cache_file_name = os.path.join(self.cache_dir, self.cache_file_name)
+
+	#Load cache data
+        self.data = self.loadData()
+
+        for index in self.data['browser_reg']['order']:
+	    bdict = {}
+            test = self.data['browser_reg'][index]
+            test_rg = self.toPythonReg(test[0])
+	    bdict['r'] = test_rg
+	    bdict['id'] = test[1]
+	    self.browser_reg.append(bdict)
+
+        for index in self.data['os_reg']:
+	    bdict = {}
+            test = self.data['os_reg'][index]
+            test_rg = self.toPythonReg(test[0])
+	    bdict['r'] = test_rg
+	    bdict['id'] = test[1]
+	    self.os_reg.append(bdict)
 
     def parse(self, useragent, entire_url=''):
         """
@@ -108,22 +130,11 @@ class UASparser(object):
         if 'os_icon' in entire_url:
             ret['os_icon'] = self.os_img_url % ret['os_icon']
 
-        def toPythonReg(reg):
-            reg_l = reg[1:reg.rfind('/')]  # modify the re into python format
-            reg_r = reg[reg.rfind('/') + 1:]
-            flag = 0
-            if 's' in reg_r:
-                flag = flag | re.S
-            if 'i' in reg_r:
-                flag = flag | re.I
-            return re.compile(reg_l, flag)
-
         #Check argument
         if not useragent:
             raise UASException("Excepted argument useragent is not given.")
 
-        #Load cache data
-        data = self.loadData()
+        data = self.data
 
         #Is it a spider?
         for index in data['robots']['order']:
@@ -146,11 +157,10 @@ class UASparser(object):
 
         #A browser
         id_browser = None
-        for index in data['browser_reg']['order']:
-            test = data['browser_reg'][index]
-            test_rg = toPythonReg(test[0]).findall(useragent)  # All regular expression should be in python format
+	for reg in self.browser_reg:
+	    test_rg = reg['r'].findall(useragent)
             if test_rg:
-                id_browser = int(test[1])  # Bingo
+                id_browser = int(reg['id'])  # Bingo
                 info = test_rg[0]
                 break
 
@@ -190,11 +200,10 @@ class UASparser(object):
 
         # Try to match an OS
         os_id = None
-        for index in data['os_reg']:
-            test = data['os_reg'][index]
-            test_rg = toPythonReg(test[0]).findall(useragent)
+	for reg in self.os_reg:
+	    test_rg = reg['r'].findall(useragent)
             if test_rg:
-                os_id = int(test[1])
+		os_id = int(reg['id'])
                 break
 
         # Get OS detail
@@ -299,3 +308,15 @@ class UASparser(object):
         self.cache_data = pickle.load(open(self.cache_file_name, 'rb'))
 
         return self.cache_data
+
+    def toPythonReg(self,reg):
+	reg = str(reg)
+        reg_l = reg[1:reg.rfind('/')]  # modify the re into python format
+        reg_r = reg[reg.rfind('/') + 1:]
+        flag = 0
+        if 's' in reg_r:
+            flag = flag | re.S
+        if 'i' in reg_r:
+            flag = flag | re.I
+        return re.compile(reg_l, flag)
+
